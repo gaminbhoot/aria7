@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ARIA-7 — Autonomous Robot Behavior Simulation</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-dot" id="brandDot"></div>
+      <span class="brand-name">ARIA-7</span>
+      <span class="brand-sep">/</span>
+      <span class="brand-sub">AUTONOMOUS ROBOT BEHAVIOR SIMULATION</span>
+    </div>
+    <div class="topbar-right">
+      <div class="chip"><div class="chip-dot" id="statusDot"></div><span id="statusText">RUNNING</span></div>
+      <div class="chip" id="stepChip">STEP 000</div>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- Canvas panel -->
+    <div class="canvas-panel">
+      <div class="panel-header">
+        <span class="panel-title">Environment Grid — 32 × 20</span>
+        <span class="panel-meta" id="envMeta">Targets: 6 · Threats: 3 · Explored: 0 cells</span>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="sim" width="720" height="440"></canvas>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+
+      <div class="s-sec">
+        <div class="s-lbl">Behavior State</div>
+        <div class="state-card" id="stateCard">
+          <div class="state-dot" id="stateDot"></div>
+          <div class="state-lbl" id="stateLbl">IDLE</div>
+        </div>
+        <div class="state-sub" id="stateSub">Waiting for environmental stimulus.</div>
+      </div>
+
+      <div class="s-sec">
+        <div class="s-lbl">Metrics</div>
+        <div class="stats-grid">
+          <div class="stat-cell"><div class="sc-lbl">Position</div><div class="sc-val" id="sPos" style="font-size:12px">—</div></div>
+          <div class="stat-cell"><div class="sc-lbl">Collected</div><div class="sc-val" id="sCol">0</div></div>
+          <div class="stat-cell"><div class="sc-lbl">Explored</div><div class="sc-val" id="sExp">0</div></div>
+          <div class="stat-cell"><div class="sc-lbl">Targets Left</div><div class="sc-val" id="sTgt">6</div></div>
+        </div>
+        <div style="margin-top:12px">
+          <div class="batt-row"><span class="batt-lbl">BATTERY</span><span class="batt-val" id="battVal">100%</span></div>
+          <div class="batt-track"><div class="batt-fill" id="battFill" style="width:100%;background:#059669"></div></div>
+        </div>
+      </div>
+
+      <div class="s-sec">
+        <div class="s-lbl">Time Distribution</div>
+        <div class="dist-row"><span class="dr-lbl">Idle</span><div class="dr-track"><div class="dr-fill" id="bar-IDLE" style="background:#9ca3af;width:0%"></div></div><span class="dr-cnt" id="cnt-IDLE">0</span></div>
+        <div class="dist-row"><span class="dr-lbl">Explore</span><div class="dr-track"><div class="dr-fill" id="bar-EXPLORE" style="background:#2563eb;width:0%"></div></div><span class="dr-cnt" id="cnt-EXPLORE">0</span></div>
+        <div class="dist-row"><span class="dr-lbl">Chase</span><div class="dr-track"><div class="dr-fill" id="bar-CHASE" style="background:#059669;width:0%"></div></div><span class="dr-cnt" id="cnt-CHASE">0</span></div>
+        <div class="dist-row"><span class="dr-lbl">Flee</span><div class="dr-track"><div class="dr-fill" id="bar-FLEE" style="background:#dc2626;width:0%"></div></div><span class="dr-cnt" id="cnt-FLEE">0</span></div>
+        <div class="dist-row"><span class="dr-lbl">Recharge</span><div class="dr-track"><div class="dr-fill" id="bar-RECHARGE" style="background:#d97706;width:0%"></div></div><span class="dr-cnt" id="cnt-RECHARGE">0</span></div>
+      </div>
+
+      <div class="s-sec" style="flex:1">
+        <div class="s-lbl">Event Log</div>
+        <div class="log-scroll" id="logBox"></div>
+      </div>
+
+      <div class="s-sec">
+        <div class="s-lbl">Controls</div>
+        <div class="ctrl-row">
+          <button class="btn btn-p" id="btnPlay" onclick="togglePlay()">Pause</button>
+          <button class="btn btn-s" onclick="resetSim()">Reset</button>
+        </div>
+        <div class="spd-row"><span class="spd-lbl">SIMULATION SPEED</span><span class="spd-val" id="spdVal">4×</span></div>
+        <input type="range" id="speedSlider" min="1" max="10" value="4"
+               oninput="document.getElementById('spdVal').textContent=this.value+'×'">
+      </div>
+
+    </div>
+
+    <!-- FSM strip -->
+    <div class="fsm-strip">
+      <div class="fsm-node" id="fsm-IDLE">
+        <div class="fsm-bar"></div>
+        <div><div class="fsm-name">Idle</div><div class="fsm-cond">Default state. Conserves energy. Transitions to Explore randomly.</div></div>
+      </div>
+      <div class="fsm-node" id="fsm-EXPLORE">
+        <div class="fsm-bar"></div>
+        <div><div class="fsm-name">Explore</div><div class="fsm-cond">Random walk. Maps environment. No target in sensor range.</div></div>
+      </div>
+      <div class="fsm-node" id="fsm-CHASE">
+        <div class="fsm-bar"></div>
+        <div><div class="fsm-name">Chase</div><div class="fsm-cond">Target within sensor range. Moves directly toward goal.</div></div>
+      </div>
+      <div class="fsm-node" id="fsm-FLEE">
+        <div class="fsm-bar"></div>
+        <div><div class="fsm-name">Flee</div><div class="fsm-cond">Threat detected in proximity. Overrides all other states.</div></div>
+      </div>
+      <div class="fsm-node" id="fsm-RECHARGE">
+        <div class="fsm-bar"></div>
+        <div><div class="fsm-name">Recharge</div><div class="fsm-cond">Battery below 25%. Stays at station until 75% restored.</div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="src/simulation.js"></script>
+<script src="src/renderer.js"></script>
+<script src="src/ui.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
